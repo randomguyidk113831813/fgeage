@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>anti overthink website für saiwan</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1042/1042339.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-6 flex flex-col items-center justify-center">
+    <div class="w-full max-w-sm space-y-8 text-center">
+        <header>
+            <h1 class="text-xl font-light tracking-widest text-gray-400 uppercase">Control Center</h1>
+            <p class="text-sm text-gray-600 mt-1">anti overthink website für saiwan</p>
+        </header>
+
+        <div class="grid grid-cols-1 gap-6">
+            <!-- Main Share Button -->
+            <button id="share-toggle" class="h-48 w-full bg-gray-800 border-2 border-blue-500/30 rounded-3xl flex flex-col items-center justify-center gap-4 transition-all active:scale-95 shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                <div id="share-icon-bg" class="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center transition-colors">
+                    <i id="share-icon" class="fas fa-desktop text-3xl text-blue-500"></i>
+                </div>
+                <span id="share-text" class="text-lg font-bold tracking-tight">START REAL SCREEN SHARE</span>
+            </button>
+
+            <!-- Manual App Streamer (For iOS Fallback) -->
+            <div id="manual-streamer" class="bg-gray-800 border-2 border-gray-700 rounded-3xl p-6 space-y-4">
+                <span class="block text-xs font-bold text-gray-500 uppercase tracking-widest">Manual App Streamer (iOS)</span>
+                <div class="grid grid-cols-3 gap-4">
+                    <button onclick="setApp('WhatsApp')" class="flex flex-col items-center gap-2 active:scale-90 transition">
+                        <div class="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg"><i class="fab fa-whatsapp text-2xl"></i></div>
+                        <span class="text-[10px] font-bold">WhatsApp</span>
+                    </button>
+                    <button onclick="setApp('Instagram')" class="flex flex-col items-center gap-2 active:scale-90 transition">
+                        <div class="w-12 h-12 bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg"><i class="fab fa-instagram text-2xl"></i></div>
+                        <span class="text-[10px] font-bold">Instagram</span>
+                    </button>
+                    <button onclick="setApp('Home')" class="flex flex-col items-center gap-2 active:scale-90 transition">
+                        <div class="w-12 h-12 bg-blue-400 rounded-xl flex items-center justify-center shadow-lg"><i class="fas fa-home text-2xl"></i></div>
+                        <span class="text-[10px] font-bold">Home</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Privacy Button -->
+            <button id="privacy-toggle" class="h-24 w-full bg-gray-800 border-2 border-gray-700 rounded-3xl flex items-center justify-between px-8 transition-all active:scale-95">
+                <div class="flex items-center gap-4">
+                    <div id="privacy-icon-bg" class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+                        <i id="privacy-icon" class="fas fa-eye text-lg text-gray-400"></i>
+                    </div>
+                    <div class="text-left">
+                        <span class="block font-bold text-sm">PRIVACY MODE</span>
+                        <span id="privacy-status-text" class="text-[10px] text-gray-500">OFF</span>
+                    </div>
+                </div>
+                <div id="privacy-switch" class="w-10 h-5 bg-gray-700 rounded-full relative transition-colors">
+                    <div id="privacy-dot" class="absolute left-1 top-1 w-3 h-3 bg-gray-400 rounded-full transition-transform"></div>
+                </div>
+            </button>
+        </div>
+
+        <div id="status-footer" class="pt-8 text-[10px] text-gray-600 uppercase tracking-[0.2em] font-medium">
+            <span id="connection-dot" class="inline-block w-2 h-2 rounded-full bg-red-500 mr-2"></span>
+            System: <span id="system-status">Standby</span>
+        </div>
+    </div>
+
+    <!-- Hidden elements for processing -->
+    <div class="hidden">
+        <video id="screen-video" autoplay playsinline muted></video>
+        <canvas id="capture-canvas"></canvas>
+    </div>
+
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js');
+        }
+
+        const socket = io();
+        let isSharing = false;
+        let isPrivacy = false;
+        let isReal = false;
+        let currentApp = "Home";
+        let streamInterval = null;
+
+        const appImages = {
+            'Home': 'https://images.unsplash.com/photo-1551650975-87deedd944c3?auto=format&fit=crop&q=80&w=400',
+            'WhatsApp': 'https://images.unsplash.com/photo-1614680376593-902f74cf0d41?auto=format&fit=crop&q=80&w=400',
+            'Instagram': 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&q=80&w=400'
+        };
+
+        function setApp(appName) {
+            currentApp = appName;
+            if (isSharing && !isReal) {
+                // Update frame immediately for manual mode
+                socket.emit('screen_frame', { image: appImages[currentApp] });
+                updateServerStatus();
+            }
+        }
+
+        const shareBtn = document.getElementById('share-toggle');
+        const shareText = document.getElementById('share-text');
+        const shareIcon = document.getElementById('share-icon');
+        const shareIconBg = document.getElementById('share-icon-bg');
+
+        const privacyBtn = document.getElementById('privacy-toggle');
+        const privacyIcon = document.getElementById('privacy-icon');
+        const privacyIconBg = document.getElementById('privacy-icon-bg');
+        const privacyStatusText = document.getElementById('privacy-status-text');
+        const privacySwitch = document.getElementById('privacy-switch');
+        const privacyDot = document.getElementById('privacy-dot');
+
+        const systemStatus = document.getElementById('system-status');
+        const connectionDot = document.getElementById('connection-dot');
+
+        const video = document.getElementById('screen-video');
+        const canvas = document.getElementById('capture-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Toggle Sharing
+        shareBtn.addEventListener('click', async () => {
+            if (isSharing) {
+                stopSharing();
+                return;
+            }
+
+            try {
+                // Try real screen share
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { cursor: "always" },
+                    audio: false
+                });
+                
+                video.srcObject = stream;
+                startStream(true);
+                
+                // Handle user stopping share via browser UI
+                stream.getVideoTracks()[0].onended = () => stopSharing();
+
+            } catch (err) {
+                console.log("Real screen share failed, falling back to simulator mode for iOS.");
+                startStream(false);
+            }
+        });
+
+        function startStream(realMode) {
+            isReal = realMode;
+            isSharing = true;
+            shareText.innerText = 'STOP SHARING';
+            shareBtn.classList.replace('border-blue-500/30', 'border-red-500/50');
+            shareIcon.classList.replace('text-blue-500', 'text-red-500');
+            shareIcon.classList.replace('fa-desktop', 'fa-stop');
+            shareIconBg.classList.replace('bg-blue-500/10', 'bg-red-500/10');
+            
+            systemStatus.innerText = 'Broadcasting Live';
+            connectionDot.classList.replace('bg-red-500', 'bg-green-500');
+
+            streamInterval = setInterval(() => {
+                if (isPrivacy) return;
+
+                if (isReal && video.srcObject) {
+                    canvas.width = video.videoWidth / 2;
+                    canvas.height = video.videoHeight / 2;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const frame = canvas.toDataURL('image/jpeg', 0.4);
+                    socket.emit('screen_frame', { image: frame });
+                } else {
+                    // Manual mode - send selected app image
+                    socket.emit('screen_frame', { image: appImages[currentApp] });
+                }
+
+                updateServerStatus();
+            }, 1000);
+        }
+
+        function updateServerStatus() {
+            socket.emit('phone_status', {
+                connected: true,
+                current_app: isReal ? "Live Screen" : currentApp,
+                privacy_mode: isPrivacy
+            });
+        }
+
+        function stopSharing() {
+            isSharing = false;
+            clearInterval(streamInterval);
+            
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+
+            shareText.innerText = 'START SCREEN';
+            shareBtn.classList.replace('border-red-500/50', 'border-blue-500/30');
+            shareIcon.classList.replace('text-red-500', 'text-blue-500');
+            shareIcon.classList.replace('fa-stop', 'fa-desktop');
+            shareIconBg.classList.replace('bg-red-500/10', 'bg-blue-500/10');
+
+            systemStatus.innerText = 'Standby';
+            connectionDot.classList.replace('bg-green-500', 'bg-red-500');
+
+            socket.emit('phone_status', { connected: false });
+        }
+
+        // Toggle Privacy
+        privacyBtn.addEventListener('click', () => {
+            isPrivacy = !isPrivacy;
+            if (isPrivacy) {
+                privacyStatusText.innerText = 'ON';
+                privacyStatusText.classList.add('text-red-500');
+                privacyIcon.classList.replace('text-gray-400', 'text-red-500');
+                privacyIcon.classList.replace('fa-eye', 'fa-eye-slash');
+                privacySwitch.classList.replace('bg-gray-700', 'bg-red-500');
+                privacyDot.classList.replace('translate-x-0', 'translate-x-6');
+                privacyDot.style.transform = 'translateX(24px)';
+                privacyDot.classList.replace('bg-gray-400', 'bg-white');
+            } else {
+                privacyStatusText.innerText = 'OFF';
+                privacyStatusText.classList.remove('text-red-500');
+                privacyIcon.classList.replace('text-red-500', 'text-gray-400');
+                privacyIcon.classList.replace('fa-eye-slash', 'fa-eye');
+                privacySwitch.classList.replace('bg-red-500', 'bg-gray-700');
+                privacyDot.style.transform = 'translateX(0px)';
+                privacyDot.classList.replace('bg-white', 'bg-gray-400');
+            }
+            
+            if (isSharing) {
+                updateServerStatus();
+            }
+        });
+    </script>
+</body>
+</html>

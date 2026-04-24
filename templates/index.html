@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>anti overthink website für saiwan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .phone-frame {
+            width: 300px;
+            height: 600px;
+            border: 12px solid #1a1a1a;
+            border-radius: 36px;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: #222;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: sans-serif;
+            position: relative;
+        }
+        .notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 25px;
+            background: #1a1a1a;
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+            z-index: 10;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .online { background-color: #10b981; }
+        .offline { background-color: #ef4444; }
+        .privacy-active {
+            background: #000 !important;
+            display: flex !important;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 p-4 border-b border-gray-700">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center">
+                <i class="fas fa-shield-alt mr-3 text-blue-500"></i>
+                anti overthink website für saiwan
+            </h1>
+            <div id="connection-status" class="flex items-center bg-gray-700 px-4 py-1 rounded-full">
+                <span id="status-dot" class="status-dot offline"></span>
+                <span id="status-text">Disconnected</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-8 flex flex-col md:flex-row gap-12 items-start justify-center">
+        <!-- Live Feed Section -->
+        <div class="flex flex-col items-center">
+            <h2 class="text-2xl font-semibold mb-6">Live Feed</h2>
+            <div class="phone-frame">
+                <div class="notch"></div>
+                <div id="screen" class="phone-screen">
+                    <div id="screen-content" class="w-full h-full flex items-center justify-center text-center p-4">
+                        <p class="text-gray-500">Waiting for connection...</p>
+                    </div>
+                    <img id="live-stream" class="w-full h-full object-cover hidden" alt="Live Stream">
+                    
+                    <!-- Privacy Overlay -->
+                    <div id="privacy-overlay" class="absolute inset-0 bg-black hidden flex-col items-center justify-center z-20">
+                        <i class="fas fa-eye-slash text-5xl text-gray-600 mb-4"></i>
+                        <p class="text-gray-400 font-medium">Privacy Protected</p>
+                        <p class="text-xs text-gray-500 mt-2">(Camera/Sensitive App)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Section -->
+        <div class="flex-1 max-w-md w-full">
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-xl mb-6">
+                <h3 class="text-lg font-semibold mb-4 border-b border-gray-700 pb-2">Device Info</h3>
+                <div class="space-y-4">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Current App:</span>
+                        <span id="current-app" class="font-medium text-blue-400">N/A</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Privacy Mode:</span>
+                        <span id="privacy-status" class="font-medium">Inactive</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Last Active:</span>
+                        <span id="last-active" class="font-medium">Never</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-xl">
+                <h3 class="text-lg font-semibold mb-4 border-b border-gray-700 pb-2">Activity Log</h3>
+                <div id="activity-log" class="space-y-2 max-h-60 overflow-y-auto text-sm text-gray-400">
+                    <p class="italic">No activity yet...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Security Check
+        const isAuth = localStorage.getItem('is_auth');
+        
+        if (!isAuth) {
+            window.location.href = '/';
+        }
+
+        const socket = io();
+        
+        // Send identity to server on connect
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            socket.emit('verify_login', {
+                password: 'saiwan123'
+            });
+        });
+
+        socket.on('login_response', (data) => {
+            if (!data.success) {
+                localStorage.clear();
+                window.location.href = '/';
+            }
+        });
+
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const currentAppEl = document.getElementById('current-app');
+        const privacyStatusEl = document.getElementById('privacy-status');
+        const lastActiveEl = document.getElementById('last-active');
+        const liveStreamImg = document.getElementById('live-stream');
+        const screenContent = document.getElementById('screen-content');
+        const privacyOverlay = document.getElementById('privacy-overlay');
+        const logEl = document.getElementById('activity-log');
+
+        function addLog(message) {
+            const now = new Date().toLocaleTimeString();
+            const p = document.createElement('p');
+            p.innerHTML = `<span class="text-gray-600">[${now}]</span> ${message}`;
+            if (logEl.innerHTML.includes('No activity yet')) logEl.innerHTML = '';
+            logEl.prepend(p);
+        }
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('update_dashboard', (state) => {
+            if (state.connected) {
+                statusDot.className = 'status-dot online';
+                statusText.innerText = 'Online';
+                screenContent.classList.add('hidden');
+                liveStreamImg.classList.remove('hidden');
+            } else {
+                statusDot.className = 'status-dot offline';
+                statusText.innerText = 'Disconnected';
+                screenContent.classList.remove('hidden');
+                liveStreamImg.classList.add('hidden');
+            }
+
+            if (currentAppEl.innerText !== state.current_app) {
+                addLog(`App changed to: <span class="text-blue-400">${state.current_app}</span>`);
+            }
+            
+            currentAppEl.innerText = state.current_app;
+            privacyStatusEl.innerText = state.privacy_mode ? 'Active' : 'Inactive';
+            privacyStatusEl.className = state.privacy_mode ? 'font-medium text-red-400' : 'font-medium text-green-400';
+            lastActiveEl.innerText = new Date().toLocaleTimeString();
+
+            if (state.privacy_mode) {
+                privacyOverlay.classList.remove('hidden');
+            } else {
+                privacyOverlay.classList.add('hidden');
+            }
+        });
+
+        socket.on('new_frame', (data) => {
+            if (data.image) {
+                liveStreamImg.src = data.image;
+                liveStreamImg.classList.remove('hidden');
+                screenContent.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

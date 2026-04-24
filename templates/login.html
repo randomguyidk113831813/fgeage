@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>anti overthink website für saiwan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 flex items-center justify-center min-h-screen">
+    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-500 rounded-full mb-4">
+                <i class="fas fa-user-shield text-white text-2xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-white">anti overthink website für saiwan</h1>
+            <p class="text-gray-400 mt-2">Enter password to access dashboard</p>
+        </div>
+
+        <div id="login-form" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Access Password</label>
+                <input type="password" id="password" class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Enter password...">
+            </div>
+            <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition transform active:scale-95">
+                Login to Dashboard
+            </button>
+            <div id="error-msg" class="text-red-500 text-sm text-center hidden"></div>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-700 text-center">
+            <p class="text-xs text-gray-500 italic">HWID Lock is currently disabled.</p>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('login-btn');
+        const errorMsg = document.getElementById('error-msg');
+
+        // Simple HWID generation (using browser fingerprint characteristics)
+        function getDeviceID() {
+            let deviceID = localStorage.getItem('hwid_lock');
+            if (!deviceID) {
+                deviceID = 'HWID-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
+                // Note: In a real scenario, this would be more complex, but for simulation 
+                // localStorage acts as the "Hardware Lock"
+            }
+            return deviceID;
+        }
+
+        loginBtn.addEventListener('click', () => {
+            const password = passwordInput.value;
+            const deviceID = getDeviceID();
+            
+            socket.emit('verify_login', {
+                password: password,
+                device_id: deviceID
+            });
+        });
+
+        socket.on('login_response', (data) => {
+            if (data.success) {
+                localStorage.setItem('hwid_lock', data.device_id);
+                localStorage.setItem('is_auth', 'true');
+                window.location.href = '/dashboard';
+            } else {
+                errorMsg.innerText = data.message;
+                errorMsg.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

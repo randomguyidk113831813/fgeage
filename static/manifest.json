@@ -1,0 +1,16 @@
+{
+  "name": "anti overthink app",
+  "short_name": "Anti-Overthink",
+  "description": "Live monitoring for Saiwan",
+  "start_url": "/phone",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#3B82F6",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1042/1042339.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

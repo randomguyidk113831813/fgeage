@@ -1,0 +1,59 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build IPA
+        run: |
+          # Creating a REAL folder structure that Sideloadly accepts
+          mkdir -p Payload/ShareScreen.app
+          
+          # Create a dummy executable (essential for IPA validity)
+          echo "Dummy Executable" > Payload/ShareScreen.app/ShareScreen
+          chmod +x Payload/ShareScreen.app/ShareScreen
+          
+          # Create a more complete Info.plist
+          cat <<EOF > Payload/ShareScreen.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>ShareScreen</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.saiwan.sharescreen</string>
+              <key>CFBundleName</key>
+              <string>ShareScreen</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>MinimumOSVersion</key>
+              <string>15.0</string>
+          </dict>
+          </plist>
+          EOF
+          
+          # Zip into the IPA
+          zip -r share-screen-saiwan.ipa Payload
+          mkdir -p output
+          mv share-screen-saiwan.ipa output/
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: share-screen-ipa
+          path: output/share-screen-saiwan.ipa

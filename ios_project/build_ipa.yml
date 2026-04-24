@@ -1,0 +1,27 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.0'
+
+      - name: Build IPA
+        run: |
+          xcodebuild -project ios_project/AntiOverthink.xcodeproj -scheme AntiOverthink -archivePath AntiOverthink.xcarchive archive
+          xcodebuild -exportArchive -archivePath AntiOverthink.xcarchive -exportOptionsPlist exportOptions.plist -exportPath output
+          
+      - name: Upload IPA
+        uses: actions/upload-artifact@v3
+        with:
+          name: anti-overthink-ipa
+          path: output/*.ipa
